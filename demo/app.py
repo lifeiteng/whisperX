@@ -47,8 +47,11 @@ def asr(
 
     options = deepcopy(model.options)
     if initial_prompt:
-        options._replace("initial_prompt", initial_prompt)
-        model.options = options
+        options._replace(initial_prompt=initial_prompt)
+
+    options._replace(temperatures=[temperature])
+    options._replace(beam_size=beam_size)
+    model.options = options
 
     audio = whisperx.load_audio(audio_file)
     result = model.transcribe(audio,
@@ -56,7 +59,9 @@ def asr(
                               language=LANGUAGES_MAP[language],
                               disable_vad=disable_vad,
                               print_progress=False)
-    
+
+    # reset options
+    options._replace(initial_prompt="")
     model.options = options
 
     if not result or not result["segments"]:
@@ -97,4 +102,4 @@ with gr.Blocks() as demo:
     submit_btn.click(fn=asr, inputs=inputs, outputs=outputs)
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", ssl_verify=False, share=False)
+    demo.launch(server_name="127.0.0.1", ssl_verify=False, share=False)
