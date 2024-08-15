@@ -260,6 +260,47 @@ class FasterWhisperPipeline(Pipeline):
         print(f"Detected language: {language} ({language_probability:.2f}) in first 30s of audio...")
         return language
 
+
+class DynamicFasterWhisperPipeline(FasterWhisperPipeline):
+    """
+    FasterWhisperPipeline supports dynamic input length.
+    """
+
+    def batch_preprocess(self, batch_audio):
+        model_n_mels = self.model.feat_kwargs.get("feature_size")
+        features = log_mel_spectrogram(
+            batch_audio,
+            n_mels=model_n_mels if model_n_mels is not None else 80,
+            padding=0,
+            device=self.device,
+        )
+        return {'inputs': features}
+
+    def collate_fn(self, audios):
+        # pad numpy arrays to the same length
+        lengths = [x.shape[0] for x in audios]
+        max_len = max(lengths)
+        audios = [np.pad(x, (0, max_len - length)) for x, length in zip(audios, lengths)]
+
+        return self.batch_preprocess(np.stack(audios, axis=0))
+
+    def get_iterator(
+        self, inputs, num_workers: int, batch_size: int, preprocess_params, forward_params, postprocess_params
+    ):
+        dataset = PipelineIterator(inputs, lambda audio: audio['inputs'], preprocess_params)
+        if "TOKENIZERS_PARALLELISM" not in os.environ:
+            os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+        def stack(items):
+            return {'inputs': torch.stack([x['inputs'] for x in items])}
+
+        dataloader = torch.utils.data.DataLoader(dataset, num_workers=num_workers, batch_size=batch_size, collate_fn=self.collate_fn)
+        model_iterator = PipelineIterator(dataloader, self.forward, forward_params, loader_batch_size=batch_size)
+        final_iterator = PipelineIterator(model_iterator, self.postprocess, postprocess_params)
+        return final_iterator
+
+
+
 def load_model(whisper_arch,
                device,
                device_index=0,
@@ -271,7 +312,8 @@ def load_model(whisper_arch,
                model : Optional[WhisperModel] = None,
                task="transcribe",
                download_root=None,
-               threads=4):
+               threads=4,
+               dynamic_model: bool = False):
     '''Load a Whisper model for inference.
     Args:
         whisper_arch: str - The name of the Whisper model to load.
@@ -353,7 +395,11 @@ def load_model(whisper_arch,
             device = f"{device}:{device_index}"
         vad_model = load_vad_model(torch.device(device), use_auth_token=None, **default_vad_options)
 
-    return FasterWhisperPipeline(
+    cls = FasterWhisperPipeline
+    if dynamic_model:
+        cls = DynamicFasterWhisperPipeline
+
+    return cls(
         model=model,
         vad=vad_model,
         options=default_asr_options,
