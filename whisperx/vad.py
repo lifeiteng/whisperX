@@ -181,9 +181,7 @@ class Binarize:
 
         # because of padding, some active regions might be overlapping: merge them.
         # also: fill same speaker gaps shorter than min_duration_off
-        if self.pad_offset > 0.0 or self.pad_onset > 0.0 or self.min_duration_off > 0.0:
-            if self.max_duration < float("inf"):
-                raise NotImplementedError(f"This would break current max_duration param")
+        if self.min_duration_off > 0.0:
             active = active.support(collar=self.min_duration_off)
 
         # remove tracks shorter than min_duration_on
@@ -266,6 +264,10 @@ def merge_chunks(
     chunk_size,
     onset: float = 0.5,
     offset: Optional[float] = None,
+    min_duration_on: float = 0.0,
+    min_duration_off: float = 0.0,
+    pad_onset: float = 0.0,
+    pad_offset: float = 0.0,
 ):
     """
     Merge operation described in paper
@@ -276,7 +278,11 @@ def merge_chunks(
     speaker_idxs = []
 
     assert chunk_size > 0
-    binarize = Binarize(max_duration=chunk_size, onset=onset, offset=offset)
+    binarize = Binarize(max_duration=chunk_size, onset=onset, offset=offset,
+                        min_duration_on=min_duration_on,
+                        min_duration_off=min_duration_off,
+                        pad_onset=pad_onset,
+                        pad_offset=pad_offset)
     segments = binarize(segments)
     segments_list = []
     for speech_turn in segments.get_timeline():
