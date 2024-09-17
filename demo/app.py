@@ -47,10 +47,10 @@ def asr(
 
     options = deepcopy(model.options)
     if initial_prompt:
-        options._replace(initial_prompt=initial_prompt)
+        options = options._replace(initial_prompt=initial_prompt)
 
-    options._replace(temperatures=[temperature])
-    options._replace(beam_size=beam_size)
+    options = options._replace(temperatures=[temperature])
+    options = options._replace(beam_size=beam_size)
     model.options = options
 
     audio = whisperx.load_audio(audio_file)
@@ -61,7 +61,7 @@ def asr(
                               print_progress=False)
 
     # reset options
-    options._replace(initial_prompt="")
+    options = options._replace(initial_prompt="")
     model.options = options
 
     if not result or not result["segments"]:
