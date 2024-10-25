@@ -5,3 +5,5 @@ transformers
 pandas
 setuptools>=65
 nltk
+# https://github.com/m-bain/whisperX/issues/901
+ctranslate2==4.4.0
